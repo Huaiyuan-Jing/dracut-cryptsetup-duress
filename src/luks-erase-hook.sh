@@ -3,7 +3,7 @@
 set -eu
 
 USER_INPUT="$(systemd-ask-password)"
-if [ "$(echo "$USER_INPUT" | check-cryptsetup-erase-signal)" -eq 0 ]
+if [ "$(echo "$USER_INPUT" | /usr/bin/check-cryptsetup-erase-signal)" -eq 0 ]
 then
     DEV="$(blkid -t TYPE="crypto_LUKS" -o device)"
     echo "$DEV" | while read -r dev
