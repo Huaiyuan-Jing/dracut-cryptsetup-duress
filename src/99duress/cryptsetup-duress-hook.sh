@@ -2,28 +2,49 @@
 
 set -eu
 
+check_duress() {
+    key_id="$(keyctl search @u user cryptsetup)"
+    passwd="$(keyctl print "$key_id")"
+
+    while read -r line
+    do
+        salt="$(echo "$line" | cut -d'$' -f3)"
+        hashed_in_tab="$(echo "$line" | cut -d'$' -f4)"
+        hashed_user="$(echo "$passwd" | openssl passwd -6 -salt "$salt" -stdin | cut -d'$' -f4)"
+        if [ "$hashed_in_tab" = "$hashed_user" ]
+        then
+            echo 0
+            exit
+        fi
+    done < /etc/dracut-cryptsetup-duress-signals
+
+    echo 1
+}
+
 udevadm settle
 
 # get uuid and disk model name to mimic real cryptsetup prompt
-CRYPTTAB="$(cat /etc/crypttab)"
-FIRST_LUKS_NAME="$(echo "$CRYPTTAB" | cut -d" " -f1)"
-FIRST_UUID="$(echo "$CRYPTTAB" | cut -d" " -f2 | cut -d"=" -f2)"
-FIRST_MODEL="$(udevadm info --query=property --property=ID_MODEL --value --name=/dev/disk/by-uuid/"$FIRST_UUID")"
-USER_INPUT="$(systemd-ask-password --keyname="cryptsetup_key" "Please enter passphrase for disk $FIRST_MODEL ($FIRST_LUKS_NAME)")"
+LUKS_ENTRY="$(head -1 /etc/crypttab)"
+MAPPER_NAME="$(echo "$LUKS_ENTRY" | cut -d" " -f1)"
+DEV_PATH="$(echo "$LUKS_ENTRY" | cut -d" " -f2)"
+REAL_DEV="$(readlink -f "$DEV_PATH" || echo "")"
+MODEL_NAME="$(udevadm info --query=property --property=ID_MODEL --value --name="$REAL_DEV" || echo "")"
 
-if [ "$(echo "$USER_INPUT" | /usr/bin/check-cryptsetup-duress-signal)" -eq 0 ]
+if [ -z "$MODEL_NAME" ]
+then
+    BANNER="Please enter passphrase for disk $MAPPER_NAME"
+else
+    BANNER="Please enter passphrase for disk $MODEL_NAME ($MAPPER_NAME)"
+fi
+
+systemd-ask-password --keyname="cryptsetup" "$BANNER"
+
+if [ "$(check_duress)" -eq 0 ]
 then
     DEV="$(blkid -t TYPE="crypto_LUKS" -o device)"
     for dev in $DEV
     do
         cryptsetup erase -q "$dev"
         sleep 5  # mimic latency from calc
-    done
-
-    # mimic wrong password
-    for _i in 1 2
-    do
-        systemd-ask-password "Please enter passphrase for disk $FIRST_MODEL ($FIRST_LUKS_NAME)"
-        sleep 5
     done
 fi

@@ -1,0 +1,21 @@
+[Unit]
+Description=Duress Password Check (Pre-Cryptsetup)
+DefaultDependencies=no
+Conflicts=shutdown.target
+
+# We must run AFTER udev (so /dev/disk/by-uuid exists for your script)
+After=systemd-udevd-kernel.socket systemd-tpm2-setup-early.service
+
+# We must run BEFORE the system starts ANY encrypted devices
+Before=cryptsetup-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+TimeoutSec=infinity
+KeyringMode=shared
+OOMScoreAdjust=500
+# StandardInput=tty-force
+# StandardOutput=inherit
+# StandardError=inherit
+ExecStart=/usr/bin/cryptsetup-duress-hook.sh

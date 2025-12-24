@@ -1,7 +1,17 @@
 .PHONY: install uninstall
 
 install:
-	sudo install -v -m 755 ./99duress/* -Dt /lib/dracut/modules.d/99duress
+	# Create directory
+	sudo mkdir -p /lib/dracut/modules.d/99duress
+
+	# Install SCRIPTS (Executable 755)
+	sudo install -v -m 755 ./99duress/module-setup.sh /lib/dracut/modules.d/99duress/
+	sudo install -v -m 755 ./99duress/cryptsetup-duress-hook.sh /lib/dracut/modules.d/99duress/
+
+	# Install SERVICE UNIT (Read-Only 644) - FIXES THE WARNING
+	sudo install -v -m 644 ./99duress/cryptsetup-duress.service /lib/dracut/modules.d/99duress/
+
+	# Install Helper Tool
 	sudo install -v -m 755 ./create-cryptsetup-duress-signal -t /usr/bin/
 
 uninstall:
