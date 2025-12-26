@@ -24,12 +24,24 @@ This solution is delivered as a custom **Dracut module**. It integrates into the
 2.  **Kernel Keyring Hook:** A script that intercepts input using `systemd-ask-password`. It pushes input to the kernel keyring to allow seamless handover to the actual `systemd-cryptsetup` process if the standard password is used.
 3.  **Boot Integration:** A systemd service ensures the hook runs prior to the standard decryption target.
 
-### Installation
+### Installation and Uninstallation
 
 The project includes a `Makefile` for automated installation of the module and utilities.
 
 ```shell
 sudo make install
+```
+
+For uninstallation, use
+
+```shell
+sudo make uninstall
+```
+
+Then regenerate initramfs
+
+```shell
+sudo dracut -f -v
 ```
 
 ### Usage & Configuration
@@ -58,6 +70,8 @@ Once configured, the `initramfs` image must be regenerated to include the new mo
 ```shell
 sudo dracut -f -v
 ```
+
+**Note:** You **must** complete all configuration in order to make `dracut` include this module into initramfs.
 
 ## Security Analysis & Limitations
 
