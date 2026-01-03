@@ -79,6 +79,7 @@ jobs:
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - name: Update PKGBUILD version
         run: |
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
           VERSION=${GITHUB_REF#refs/tags/v}
           sed -i "s/pkgver=0.1.0/pkgver=$VERSION/" PKGBUILD
           echo "Building version $VERSION"
