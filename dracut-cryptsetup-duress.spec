@@ -16,7 +16,7 @@ A dracut module that enables a duress password for LUKS encrypted drives.
 When the duress password is entered, specific actions (like header destruction) are triggered.
 
 %prep
-%setup -q
+%setup -q -c
 
 %install
 mkdir -p %{buildroot}/usr/lib/dracut/modules.d/99duress
