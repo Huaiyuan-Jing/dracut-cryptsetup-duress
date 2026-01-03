@@ -86,9 +86,16 @@ jobs:
         run: |
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-          FILENAME="dracut-cryptsetup-duress-${{ env.VERSION }}.tar.gz"
-          tar czf "/tmp/$FILENAME" --exclude=.git .
-          mv "/tmp/$FILENAME" .
+          PKG_NAME="dracut-cryptsetup-duress"
+          PKG_VER="${{ env.VERSION }}"
+          DIR_NAME="${PKG_NAME}-${PKG_VER}"
+          TAR_NAME="${DIR_NAME}.tar.gz"
+          mkdir -p "/tmp/${DIR_NAME}"
+          cp -r . "/tmp/${DIR_NAME}/"
+          tar czf "${TAR_NAME}" -C /tmp "${DIR_NAME}"
+          ls -l "${TAR_NAME}"
+          sed -i 's|::https://[^"]*||g' PKGBUILD
+          grep "^source=" PKGBUILD
           chown -R builder:builder .
           su builder -c "makepkg -sf --noconfirm"
           ls -l *.pkg.tar.zst
