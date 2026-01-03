@@ -1,0 +1,2 @@
+module-setup.sh usr/lib/dracut/modules.d/99duress/
+*.sh usr/lib/dracut/modules.d/99duress/
