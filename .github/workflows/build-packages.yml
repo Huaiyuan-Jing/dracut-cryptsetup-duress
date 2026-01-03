@@ -68,28 +68,27 @@ jobs:
   build-arch:
     name: Build Arch Linux Package
     runs-on: ubuntu-latest
+    container: archlinux:latest 
     steps:
-      - uses: actions/checkout@v3
+      - name: Install Build Tools
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -Su --noconfirm
+          pacman -S --noconfirm base-devel git
+      - uses: actions/checkout@v4
+      - name: Fix Git Ownership
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - name: Update PKGBUILD version
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           sed -i "s/pkgver=0.1.0/pkgver=$VERSION/" PKGBUILD
           echo "Building version $VERSION"
-
       - name: Build Package
-        id: arch_build
-        uses: uraimo/run-on-arch-action@v2
-        with:
-          arch: x86_64
-          distro: archlinux
-          githubToken: ${{ github.token }}
-          install: base-devel git
-          run: |
-            useradd -m builder
-            chown -R builder:builder .
-            su builder -c "makepkg -sf --noconfirm"
-            ls -l *.pkg.tar.zst
-
+        run: |
+          useradd -m builder
+          chown -R builder:builder .
+          su builder -c "makepkg -sf --noconfirm"
+          ls -l *.pkg.tar.zst
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
