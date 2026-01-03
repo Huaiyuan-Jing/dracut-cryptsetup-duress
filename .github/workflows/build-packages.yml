@@ -65,8 +65,39 @@ jobs:
           name: deb-package
           path: build_artifacts/*.deb
 
+  build-arch:
+    name: Build Arch Linux Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Update PKGBUILD version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          sed -i "s/pkgver=0.1.0/pkgver=$VERSION/" PKGBUILD
+          echo "Building version $VERSION"
+
+      - name: Build Package
+        id: arch_build
+        uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: x86_64
+          distro: archlinux
+          githubToken: ${{ github.token }}
+          install: base-devel git
+          run: |
+            useradd -m builder
+            chown -R builder:builder .
+            su builder -c "makepkg -sf --noconfirm"
+            ls -l *.pkg.tar.zst
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: ./*.pkg.tar.zst
+
   create-release:
-    needs: [build-rpm, build-deb] 
+    needs: [build-rpm, build-deb, build-arch] 
     runs-on: ubuntu-latest
     permissions:
       contents: write 
@@ -81,6 +112,11 @@ jobs:
           name: deb-package
           path: ./assets
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: arch-package
+          path: ./assets
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
@@ -88,19 +124,23 @@ jobs:
           files: |
             ./assets/*.rpm
             ./assets/*.deb
+            ./assets/*.pkg.tar.zst
           body: |
             ## Installation
             
             ### RPM (CentOS/Fedora/RHEL)
             ```bash
             sudo rpm -ivh dracut-cryptsetup-duress-${{ github.ref_name }}.noarch.rpm
-            sudo dracut -f
             ```
             
             ### DEB (Debian/Ubuntu/Kali)
             ```bash
             sudo dpkg -i dracut-cryptsetup-duress_${{ github.ref_name }}_all.deb
-            sudo update-initramfs -u
+            ```
+
+            ### ARCH (Archlinux/Manjaro)
+            ```bash
+            sudo pacman -U dracut-cryptsetup-duress-${{ github.ref_name }}-1-any.pkg.tar.zst
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
