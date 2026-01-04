@@ -26,6 +26,8 @@ This solution is delivered as a custom **Dracut module**. It integrates into the
 
 ### Installation and Uninstallation
 
+#### Manual Install & Uninstall
+
 The project includes a `Makefile` for automated installation of the module and utilities.
 
 ```shell
@@ -38,11 +40,11 @@ For uninstallation, use
 sudo make uninstall
 ```
 
-Then regenerate initramfs
+#### Package Manager
 
-```shell
-sudo dracut -f -v
-```
+Packaging is still under development. We will support Ubuntu, Fedora and Arch Linux.
+
+**Note:** At this point, the module hasn't been integrated into the initramfs. You need to complete the following configuration steps and regenerate initramfs to complete the integration.
 
 ### Usage & Configuration
 
