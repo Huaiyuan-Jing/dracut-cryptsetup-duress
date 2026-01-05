@@ -18,6 +18,13 @@ The concept of "Emergency Data Protection" is established in mobile security res
 
 This solution is delivered as a custom **Dracut module**. It integrates into the `initramfs` (initial RAM filesystem) to intercept user input before the root file system is mounted.
 
+### Work Flow
+
+1. System boots. Duress systemd service unit runs before standard `systemd-cryptsetup` service units. Invoke the hook script.
+2. The hook script reads the configuration file. Decide the operation mode (see below, Mode Configuration). Show the emergency prompt (indistinguishable from the standard login prompt used by `systemd-cryptsetup`).
+3. User types in the password. If password matches any registered emergency signal, emergency data protection protocol is triggered. Boot will fail later. Password will be pushed into the kernel keyring store, regardless of whether it's an emergency signal.
+4. Duress systemd service unit exits. Standard `systemd-cryptsetup` service units run. They look into the kernel keyring store and fetch the password pushed by the duress service unit. If password is correct, disk is unlocked and boot proceeds. Otherwise, they may ask the user password again. If multiple passwords are used to unlock different disks, they will be asked in this step. If the data protection protocol was previously triggered, the boot process will fail after this step.
+
 ### Architecture
 
 1.  **User-Space Utility (`duressctl`):** A management tool to register duress signal hashes and configure the boot prompt mode (Passphrase vs. TPM).
@@ -42,7 +49,7 @@ sudo make uninstall
 
 #### Package Manager
 
-Packaging is still under development. We will support Ubuntu, Fedora and Arch Linux.
+Packaging is still under development. We plan to support Ubuntu, Fedora and Arch Linux.
 
 **Note:** At this point, the module hasn't been integrated into the initramfs. You need to complete the following configuration steps and regenerate initramfs to complete the integration.
 
@@ -50,7 +57,7 @@ Packaging is still under development. We will support Ubuntu, Fedora and Arch Li
 
 #### 1. Registering Signals
 
-Use the control utility to hash and store emergency signals. These are stored in the system configuration.
+Use the control utility to hash and store emergency signals. These are stored in the system configuration. The emergency signals are global, applying to all operation modes (see below). Any registered signal typed in the emergency prompt (i.e. password prompt used by this tool) will trigger the emergency data protection protocol.
 
 ```shell
 sudo duressctl add
@@ -58,12 +65,22 @@ sudo duressctl add
 
 #### 2. Mode Configuration
 
-To maintain operational security (OpSec), the emergency prompt must be indistinguishable from the standard login prompt. You can configure the module to mimic a standard passphrase prompt or a TPM PIN prompt.
+The tool currently supports passphrase and TPM2 key binding for `cryptsetup`. In passphrase mode, the emergency data protection protocol executes the `cryptsetup erase` command on all LUKS devices visible to the OS. In TPM2 mode, a custom Storage Key (SK) will be generated to seal the volume master key (VMK) of all LUKS containers visible to the OS. Then the user will be handed over to the standard `systemd-cryptenroll` to bind all LUKS containers to the SK. Note that in this step, the TPM PIN is a normal PIN used to unlock the disk, not emergency signals. Emergency data protection protocol executes the `tpm2_evictcontrol` command on the custom SK.
+
+Since passphrase mode essentially just drops all keyslots in LUKS header, it can be used together with TPM2 mode. The effect is the combination of both. In this operation mode, the TPM PIN prompt will be shown as the emergency prompt.
 
 ```shell
-sudo duressctl mode passphrase     # passphrase mode
-sudo duressctl mode tpm            # tpm mode
+sudo duressctl mode passphrase      # passphrase mode
+sudo duressctl mode tpm             # tpm mode, only PIN as policy for authentication, no PCR is used
+sudo duressctl mode tpm --pcrs 0,7  # tpm mode, with PIN + PCRs #0 and #7 as authentication policy
+sudo duressctl mode tpm passphrase  # tpm mode without PCR policy + passphrase mode
 ```
+
+The configuration process is designed to be interactive, because the tool relies on the standard `systemd-cryptenroll` to bind VMKs to the TPM. This process requires the user to type in the existing passphrase to unlock the container, which is interactive.
+
+To maintain operational security (OpSec), the emergency prompt used by tool is indistinguishable from the standard login prompt used by `systemd-cryptsetup`.
+
+**WARNING:** If you use the TPM2 mode with PCR policy, make sure you have a backup recovery plan (However, the plan should not be setting up another non-TPM bound keyslot, see below, Security Analysis & Limitations). Otherwise, any event that makes the PCRs change (e.g., update UEFI firmware or bootloader) will prevent the TPM from unsealing the VMK.
 
 #### 3. System Integration
 
@@ -78,30 +95,30 @@ sudo dracut -f -v
 ## Security Analysis & Limitations
 
 ### 1. Threat Model: Pre-Imaging
-This protocol defends against *immediate* physical compromise. It does not protect against attacks where an unauthorized actor has already cloned (imaged) the encrypted drive prior to the coercion event. In such cases, the erased header could be restored from the backup image.
+This protocol defends against *immediate* physical compromise. If it is not configured to operate in TPM2 mode OR there is any other non-TPM bound keyslot, it cannot protect against attacks where an unauthorized actor has already cloned (imaged) the encrypted drive prior to the coercion event. In such cases, the erased header could be restored from the backup image.
 
 ### 2. Hardware Limitations (SSD Wear Leveling)
 On NAND-based storage (SSDs), issuing a header wipe command does not guarantee immediate physical overwriting of the data cells due to wear-leveling algorithms. The controller may mark the old header block as "invalid" and write zeros to a new block. Sophisticated forensic analysis at the controller level could potentially recover the old header before the drive's Garbage Collection (GC) cycle completes.
-* *Mitigation Research:* Future work involves binding the LUKS master key to the **TPM NVRAM**. Since TPM storage can be reset instantly and reliably, this would bypass SSD wear-leveling concerns.
+* *Mitigation Research (Implemented):* Configure the tool works under the TPM2 mode. This binds the LUKS volume master key to the **TPM NVRAM**. Since TPM storage can be reset instantly and reliably, this would bypass SSD wear-leveling concerns. However, this requires that there should be only one keyslot in the LUKS header, and that keyslot is bound to the custom SK generated by `duressctl mode tpm`. Otherwise, an unauthorized actor could compel the victim to reveal the passphrase of the non-TPM volume master key, bypassing the TPM protection.
 
 ### 3. Operational Risks
-This tool is destructive by design. There is no recovery mechanism once the LUKS header is wiped. Users are advised to maintain secure, off-site backups if data recovery is required after a false-positive trigger.
+This tool is destructive by design. There is no recovery mechanism once the LUKS header is wiped or SK is dropped from TPM NVRAM. Users are advised to maintain secure, off-site backups if data recovery is required after a false-positive trigger.
 
 ### 4. Behavioral Assumptions (Rational Actor Model)
 This protocol implements a technical data protection mechanism. It assumes a "rational actor" threat model, where the unauthorized actor's primary goal is data acquisition. The premise is that demonstrating the irretrievable loss of data removes the incentive for continued coercion. However, this tool is strictly a technical control; it cannot mitigate physical safety risks if the unauthorized actor behaves irrationally or punitively following the data loss.
 
 ### 5. System Hardening Recommendation (Emergency Shell)
-If the erasure protocol is triggered, the boot process will fail (as the encrypted volume is no longer accessible), and the system may drop into a `dracut` emergency shell. To prevent unauthorized actors from utilizing this shell to probe the remaining hardware state, it is critical to **lock the root account**.
-* *Implementation:* Ensure the root is locked in the `/etc/shadow` file included in the initramfs generation.
+If the data protection protocol is triggered, the boot process will fail (as the encrypted volume is no longer accessible), and the system may drop into a `dracut` emergency shell. To prevent unauthorized actors from utilizing this shell to probe the remaining hardware state, it is critical to **lock the root account**.
+* *Solution:* Ensure the root is locked in the `/etc/shadow` file included in the initramfs generation.
 
 ## Project Roadmap
 
-The primary focus for future development addresses the hardware limitations of modern SSDs.
+The primary focus for future development addresses the granularity of the emergency signal.
 
-* **TPM 2.0 Integration & Key Binding:**
-    To bypass SSD wear-leveling issues, future versions aim to bind the LUKS master key to the platform's TPM (Trusted Platform Module). In this configuration, the duress signal would trigger a reset of the TPM's NVRAM or specific PCR banks. Since the TPM state can be instantaneously and reliably cleared, this would render the decryption key mathematically unrecoverable, regardless of the physical state of the SSD's memory cells.
+* **Finer-grained Emergency Signal:**
+    Emergency signals are currently global. Any registered signal will trigger the emergency data protection protocol on all LUKS containers. In certain scenarios, a signal tied to a specific LUKS container is desirable, rather than affecting all of them.
 
-    *Community contributions and Pull Requests regarding TPM 2.0 integration are highly encouraged.*
+    *Community contributions and Pull Requests regarding finer-grained emergency signal are highly encouraged.*
 
 ## Legal Disclaimer
 
