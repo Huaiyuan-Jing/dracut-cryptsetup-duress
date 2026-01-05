@@ -5,7 +5,8 @@ set -eu
 . /etc/dracut-cryptsetup-duress-mode
 
 check_duress() {
-    key_id="$(keyctl search @u user cryptsetup)"
+    key_name="$1"
+    key_id="$(keyctl search @u user "$key_name")"
     passwd="$(keyctl print "$key_id")"
 
     while read -r line
@@ -35,22 +36,32 @@ then
     else
         BANNER="Please enter passphrase for disk $MODEL_NAME ($MAPPER_NAME)"
     fi
+    KEYNAME="cryptsetup"
 fi
 
 if [ "$TPM" = "yes" ]
 then
     BANNER="Please enter LUKS2 token PIN"
+    KEYNAME="luks2-pin"
 fi
 
-systemd-ask-password --keyname="cryptsetup" --no-output "$BANNER"
+systemd-ask-password --keyname="$KEYNAME" --no-output "$BANNER"
 
-if [ "$(check_duress)" -eq 0 ]
+if [ "$(check_duress $KEYNAME)" -eq 0 ]
 then
-    DEV="$(blkid -t TYPE="crypto_LUKS" -o device)"
-    for dev in $DEV
-    do
-        cryptsetup erase -q "$dev"
-    done
+    if [ "$PASSPHRASE" = "yes" ]
+    then
+        DEV="$(blkid -t TYPE="crypto_LUKS" -o device)"
+        for dev in $DEV
+        do
+            cryptsetup erase -q "$dev"
+        done
+    fi
+
+    if [ "$TPM" = "yes" ]
+    then
+        tpm2_evictcontrol -C o -c "$TPM_KEY_HANDLE"
+    fi
 
     sleep 5  # mimic latency from calc
 fi

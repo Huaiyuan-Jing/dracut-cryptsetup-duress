@@ -19,7 +19,7 @@ check() {
 }
 
 depends() {
-    echo bash systemd systemd-ask-password systemd-cryptsetup crypt # tpm2-tss
+    echo bash systemd systemd-ask-password systemd-cryptsetup crypt tpm2-tss
 }
 
 install() {
@@ -50,7 +50,7 @@ install() {
     inst "$moddir/cryptsetup-duress-hook.sh" /usr/bin/cryptsetup-duress-hook.sh
     
     # binary utilities used by duress script
-    inst_multiple openssl cut sleep cryptsetup head keyctl # tpm2 tpm2_clear
+    inst_multiple openssl cut sleep cryptsetup head keyctl tpm2 tpm2_evictcontrol
 
     # install systemd service
     inst_simple "$moddir/cryptsetup-duress.service" \
