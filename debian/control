@@ -1,14 +1,12 @@
 Source: dracut-cryptsetup-duress
 Section: utils
 Priority: optional
-Maintainer: Melody <your.email@example.com>
-Build-Depends: debhelper (>= 11)
-Standards-Version: 4.1.3
+Maintainer: Chenglong Yu <chenglong.yu.cs@proton.me>
+Build-Depends: debhelper (>= 13), make, coreutils
+Standards-Version: 4.7.3
 Homepage: https://github.com/melody0123/dracut-cryptsetup-duress
 
 Package: dracut-cryptsetup-duress
 Architecture: all
-Depends: ${misc:Depends}, dracut, cryptsetup, cryptsetup-initramfs
-Description: Dracut module for duress password protection
- This package provides a dracut module to handle duress passwords
- for LUKS volumes during the initramfs boot stage.
+Depends: ${misc:Depends}, dracut, cryptsetup, tpm2-tools, python3, systemd, keyutils, openssl, coreutils
+Description: A Dracut module for defensive data protection and emergency key management in high-security environments.

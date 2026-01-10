@@ -3,7 +3,12 @@ set -e
 
 if [ "$1" = "configure" ]; then
     echo "dracut-cryptsetup-duress installed."
-    echo "You should regenerate your initramfs using: dracut -f -v"
+    echo "In order to include it into initramfs,"
+    echo "you MUST complete configuration first by:"
+    echo "duressctl add"
+    echo "duressctl mode <your_chosen_mode>"
+    echo "Then regenerate your initramfs using: dracut -f -v"
+    echo "See README.md and duressctl --help for more information."
 fi
 
 #DEBHELPER#

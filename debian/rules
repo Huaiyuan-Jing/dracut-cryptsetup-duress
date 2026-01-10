@@ -2,3 +2,13 @@
 
 %:
 	dh $@
+
+override_dh_auto_build:
+	@echo "Skipping build step - scripts only"
+
+override_dh_auto_install:
+	dh_auto_install
+
+	# Remove the redundant license file and README.md
+	rm -r debian/dracut-cryptsetup-duress/usr/share/licenses
+	rm debian/dracut-cryptsetup-duress/usr/share/doc/dracut-cryptsetup-duress/README.md

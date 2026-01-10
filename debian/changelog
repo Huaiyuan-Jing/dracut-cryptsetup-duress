@@ -1,0 +1,5 @@
+dracut-cryptsetup-duress (1.0.0-1) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Chenglong Yu <chenglong.yu.cs@proton.me>  Sat, 10 Jan 2026 12:00:00 +0000

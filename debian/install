@@ -1,2 +1,0 @@
-src/duressctl usr/bin/
-src/99duress/* usr/lib/dracut/modules.d/99duress/
