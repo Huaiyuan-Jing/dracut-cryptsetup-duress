@@ -8,6 +8,7 @@ URL:            https://github.com/melody0123/dracut-cryptsetup-duress
 Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
+BuildRequires:  make coreutils
 Requires:       dracut bash cryptsetup python3 tpm2-tools systemd systemd-udev coreutils keyutils openssl
 
 %description
@@ -18,12 +19,7 @@ When the duress password is entered, specific actions (like keyslot erasure or T
 %setup -q -c
 
 %install
-mkdir -p %{buildroot}/usr/lib/dracut/modules.d/99duress
-mkdir -p %{buildroot}/usr/bin
-install -v -m 755 src/99duress/module-setup.sh %{buildroot}/usr/lib/dracut/modules.d/99duress/
-install -v -m 755 src/99duress/cryptsetup-duress-hook.sh %{buildroot}/usr/lib/dracut/modules.d/99duress/
-install -v -m 644 src/99duress/cryptsetup-duress.service %{buildroot}/usr/lib/dracut/modules.d/99duress/
-install -v -m 755 src/duressctl %{buildroot}/usr/bin/
+make DESTDIR=%{buildroot} install
 
 %files
 /usr/lib/dracut/modules.d/99duress
