@@ -9,7 +9,7 @@ jobs:
     container: fedora:latest
     steps:
       - name: Install Build Tools
-        run: dnf install -y git rpm-build rpmdevtools tar
+        run: dnf install -y git rpm-build rpmdevtools tar make
 
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -21,7 +21,7 @@ jobs:
 
       - name: Build RPM
         run: |
-          mkdir -p ~/rpmbuild/{SOURCES,SPECS}
+          rpmdev-setuptree
           
           sed -i "s/^Version:.*/Version:        ${{ env.VERSION }}/" *.spec
           
@@ -37,34 +37,6 @@ jobs:
           name: rpm-package
           path: ./*.rpm
 
-  build-deb:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Build Tools
-        run: sudo apt-get update && sudo apt-get install -y debhelper devscripts build-essential
-
-      - name: Prepare Version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
-
-      - name: Update Changelog
-        run: |
-          dch --create --package dracut-cryptsetup-duress -v "${{ env.VERSION }}-1" "Automated release from GitHub Actions"
-          export DEBIAN_FRONTEND=noninteractive
-
-      - name: Build DEB
-        run: |
-          dpkg-buildpackage -us -uc -b
-          mkdir build_artifacts
-          mv ../*.deb build_artifacts/
-
-      - name: Upload DEB Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: deb-package
-          path: build_artifacts/*.deb
-
   build-arch:
     runs-on: ubuntu-latest
     container: archlinux:latest 
@@ -74,48 +46,50 @@ jobs:
           pacman -Sy --noconfirm archlinux-keyring
           pacman -Su --noconfirm
           pacman -S --noconfirm base-devel git
-      - uses: actions/checkout@v4
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: Fix Git Ownership
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
+
       - name: Update PKGBUILD version
         run: |
           echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
           VERSION=${GITHUB_REF#refs/tags/v}
-          sed -i "s/pkgver=0.1.0/pkgver=$VERSION/" PKGBUILD
+          sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
           echo "Building version $VERSION"
+
       - name: Build Package
         run: |
+          # cannot use root to build
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-          INSTALL_FILE="dracut-cryptsetup-duress.install"
-          cat <<EOF > "$INSTALL_FILE"
-          post_install() {
-              echo "-------------------------------------------------------------------"
-              echo ":: Dracut module installed."
-              echo ":: To apply changes, please regenerate your initramfs:"
-              echo "   sudo duressctl add"
-              echo "   sudo dracut -f -v"
-              echo "-------------------------------------------------------------------"
-          }
-          
-          post_upgrade() {
-              post_install
-          }
-          EOF
-          echo "install='$INSTALL_FILE'" >> PKGBUILD
+
+          # variables
           PKG_NAME="dracut-cryptsetup-duress"
           PKG_VER="${{ env.VERSION }}"
           DIR_NAME="${PKG_NAME}-${PKG_VER}"
           TAR_NAME="${DIR_NAME}.tar.gz"
+          BUILD_DIR="/tmp/build"
+
+          # prepare tarball
           mkdir -p "/tmp/${DIR_NAME}"
           cp -r . "/tmp/${DIR_NAME}/"
           tar czf "${TAR_NAME}" -C /tmp "${DIR_NAME}"
-          ls -l "${TAR_NAME}"
-          sed -i 's|::https://[^"]*||g' PKGBUILD
-          grep "^source=" PKGBUILD
-          chown -R builder:builder .
+
+          # move tarball, PKGBUILD and install file
+          mkdir -p "${BUILD_DIR}"
+          mv "${TAR_NAME}" PKGBUILD "${PKG_NAME}.install" "${BUILD_DIR}/"
+
+          # build
+          chown -R builder:builder "${BUILD_DIR}"
+          cd "${BUILD_DIR}"
           su builder -c "makepkg -sf --noconfirm"
-          ls -l *.pkg.tar.zst
+
+          # move package back to workspace
+          mv *.pkg.tar.zst "${GITHUB_WORKSPACE}/"
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -123,7 +97,7 @@ jobs:
           path: ./*.pkg.tar.zst
 
   create-release:
-    needs: [build-rpm, build-deb, build-arch] 
+    needs: [build-rpm, build-arch] 
     runs-on: ubuntu-latest
     permissions:
       contents: write 
@@ -131,11 +105,6 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: rpm-package
-          path: ./assets
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: deb-package
           path: ./assets
 
       - uses: actions/download-artifact@v4
@@ -149,24 +118,4 @@ jobs:
         with:
           files: |
             ./assets/*.rpm
-            ./assets/*.deb
             ./assets/*.pkg.tar.zst
-          body: |
-            ## Installation
-            
-            ### RPM (CentOS/Fedora/RHEL)
-            ```bash
-            sudo rpm -ivh dracut-cryptsetup-duress-${{ github.ref_name }}.noarch.rpm
-            ```
-            
-            ### DEB (Debian/Ubuntu/Kali)
-            ```bash
-            sudo dpkg -i dracut-cryptsetup-duress_${{ github.ref_name }}_all.deb
-            ```
-
-            ### ARCH (Archlinux/Manjaro)
-            ```bash
-            sudo pacman -U dracut-cryptsetup-duress-${{ github.ref_name }}-1-any.pkg.tar.zst
-            ```
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
