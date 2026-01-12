@@ -51,6 +51,10 @@ sudo make uninstall
 
 Packaging is still under development. We plan to support Ubuntu, Fedora and Arch Linux.
 
+**Jan 12, 2026 Update:** 
+  * RPM and Pacman packages have been released on GitHub, without signature. Signature will be added in the future. Copr and AUR repositories will also be provided in the future. 
+  * Since test did not pass on Ubuntu 24.03 Desktop with Dracut, support for Debian-based distributions is still undergoing development.
+
 **Note:** At this point, the module hasn't been integrated into the initramfs. You need to complete the following configuration steps and regenerate initramfs to complete the integration.
 
 ### Usage & Configuration
@@ -131,6 +135,12 @@ This tool is destructive by design. There is no recovery mechanism once the LUKS
 
 ### 7. Behavioral Assumptions (Rational Actor Model)
 This protocol implements a technical data protection mechanism. It assumes a "rational actor" threat model, where the unauthorized actor's primary goal is data acquisition. The premise is that demonstrating the irretrievable loss of data removes the incentive for continued coercion. However, this tool is strictly a technical control; it cannot mitigate physical safety risks if the unauthorized actor behaves irrationally or punitively following the data loss.
+
+## Known Issues
+
+* **Delayed Input on Arch Linux:** The module is tested on Arch Linux without Plymouth. We noticed that first few characters typed in were not captured. User can determine if the input is captured by seeing if the prompt `(press TAB for no echo)` disappears or not, and if the small dots representing user input show or not.
+
+* **Bug on Ubuntu 24.04:** After switching to Dracut and integrating the module into initramfs, we found that after typing in passphrase, boot process freezed. Root cause is still undergoing investigation.
 
 ## Project Roadmap
 
